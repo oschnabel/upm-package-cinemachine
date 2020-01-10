@@ -6,11 +6,10 @@
     #if CINEMACHINE_HDRP_7_0_0
     using UnityEngine.Rendering.HighDefinition;
     #else
-        #if CINEMACHINE_LWRP_7_0_0
-        using UnityEngine.Rendering.Universal;
-        #else
-        using UnityEngine.Experimental.Rendering.HDPipeline;
-        #endif
+    using UnityEngine.Experimental.Rendering.HDPipeline;
+    #endif
+    #if CINEMACHINE_LWRP_7_0_0
+    using UnityEngine.Rendering.Universal;
     #endif
 #endif
 
@@ -66,16 +65,31 @@ namespace Cinemachine.PostFX.Editor
             if (m_FocusTracksTarget.boolValue)
             {
                 bool valid = false;
-                DepthOfField dof;
-                if (Target.m_Profile != null && Target.m_Profile.TryGet(out dof))
+                
+                if (Target.m_Profile != null)
                 {
-#if CINEMACHINE_LWRP_7_0_0
-                    valid = dof.active && dof.focusDistance.overrideState
-                        && dof.mode != DepthOfFieldMode.Off;
-#else
-                    valid = dof.active && dof.focusDistance.overrideState
-                        && dof.focusMode == DepthOfFieldMode.UsePhysicalCamera;
-#endif
+
+                    if (QualityTracker.GetCurrentRenderPipeline() is UniversalRenderPipelineAsset)
+                    {
+                        // URP
+                        UnityEngine.Rendering.Universal.DepthOfField dofURP;
+                        if (Target.m_Profile.TryGet(out dofURP))
+                        {
+                            valid = dofURP.active && dofURP.focusDistance.overrideState
+                            && dofURP.mode != UnityEngine.Rendering.Universal.DepthOfFieldMode.Off;
+                        }
+
+                    }
+                    else if (QualityTracker.GetCurrentRenderPipeline() is HDRenderPipelineAsset)
+                    {
+                        //HDRP
+                        UnityEngine.Rendering.HighDefinition.DepthOfField dofHDRP;
+                        if (Target.m_Profile.TryGet(out dofHDRP))
+                        {
+                            valid = dofHDRP.active && dofHDRP.focusDistance.overrideState
+                                && dofHDRP.focusMode == UnityEngine.Rendering.HighDefinition.DepthOfFieldMode.UsePhysicalCamera;
+                        }
+                    }
                 }
                 if (!valid)
                     EditorGUILayout.HelpBox(

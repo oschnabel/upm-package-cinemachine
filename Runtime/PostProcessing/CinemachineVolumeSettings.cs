@@ -6,11 +6,11 @@
     #if CINEMACHINE_HDRP_7_0_0
     using UnityEngine.Rendering.HighDefinition;
     #else
-        #if CINEMACHINE_LWRP_7_0_0
-        using UnityEngine.Rendering.Universal;
-        #else
-        using UnityEngine.Experimental.Rendering.HDPipeline;
-        #endif
+    using UnityEngine.Experimental.Rendering.HDPipeline;
+    #endif
+
+    #if CINEMACHINE_LWRP_7_0_0 || CINEMACHINE_LWRP_7_1_3
+    using UnityEngine.Rendering.Universal;
     #endif
 #endif
 
@@ -118,15 +118,33 @@ namespace Cinemachine.PostFX
                         if (extra.mProfileCopy == null)
                             extra.CreateProfileCopy(m_Profile);
                         profile = extra.mProfileCopy;
-                        DepthOfField dof;
-                        if (profile.TryGet(out dof))
+                        if(QualityTracker.GetCurrentRenderPipeline() is UniversalRenderPipelineAsset)
                         {
-                            float focusDistance = m_FocusOffset;
-                            if (state.HasLookAt)
-                                focusDistance += (state.FinalPosition - state.ReferenceLookAt).magnitude;
-                            dof.focusDistance.value = Mathf.Max(0, focusDistance);
-                            profile.isDirty = true;
+                            // URP
+                            UnityEngine.Rendering.Universal.DepthOfField dofURP;
+                            if (profile.TryGet(out dofURP))
+                            {
+                                float focusDistance = m_FocusOffset;
+                                if (state.HasLookAt)
+                                    focusDistance += (state.FinalPosition - state.ReferenceLookAt).magnitude;
+                                dofURP.focusDistance.value = Mathf.Max(0, focusDistance);
+                                profile.isDirty = true;
+                            }
+
+                        } else if(QualityTracker.GetCurrentRenderPipeline() is HDRenderPipelineAsset)
+                        {
+                            //HDRP
+                            UnityEngine.Rendering.HighDefinition.DepthOfField dofHDRP;
+                            if (profile.TryGet(out dofHDRP))
+                            {
+                                float focusDistance = m_FocusOffset;
+                                if (state.HasLookAt)
+                                    focusDistance += (state.FinalPosition - state.ReferenceLookAt).magnitude;
+                                dofHDRP.focusDistance.value = Mathf.Max(0, focusDistance);
+                                profile.isDirty = true;
+                            }
                         }
+                        
                     }
                     // Apply the post-processing
                     state.AddCustomBlendable(new CameraState.CustomBlendable(profile, 1));
@@ -224,23 +242,40 @@ namespace Cinemachine.PostFX
                 }
 
                 // Update the volume's layer so it will be seen
-#if CINEMACHINE_LWRP_7_0_0
-                var data = brain.gameObject.GetComponent<UniversalAdditionalCameraData>();
-#else
-                var data = brain.gameObject.GetComponent<HDAdditionalCameraData>();
-#endif
-                if (data != null)
+                
+                if (QualityTracker.GetCurrentRenderPipeline() is UniversalRenderPipelineAsset)
                 {
-                    int mask = data.volumeLayerMask;
-                    for (int i = 0; i < 32; ++i)
+                    UniversalAdditionalCameraData dataURP = brain.gameObject.GetComponent<UniversalAdditionalCameraData>();
+                    if (dataURP != null)
                     {
-                        if ((mask & (1 << i)) != 0)
+                        int mask = dataURP.volumeLayerMask;
+                        for (int i = 0; i < 32; ++i)
                         {
-                            volumeOwner.layer = i;
-                            break;
+                            if ((mask & (1 << i)) != 0)
+                            {
+                                volumeOwner.layer = i;
+                                break;
+                            }
                         }
                     }
                 }
+                else
+                {
+                    HDAdditionalCameraData dataHDRP = brain.gameObject.GetComponent<HDAdditionalCameraData>();
+                    if (dataHDRP != null)
+                    {
+                        int mask = dataHDRP.volumeLayerMask;
+                        for (int i = 0; i < 32; ++i)
+                        {
+                            if ((mask & (1 << i)) != 0)
+                            {
+                                volumeOwner.layer = i;
+                                break;
+                            }
+                        }
+                    }
+                }
+
 
                 while (sVolumes.Count < minVolumes)
                     sVolumes.Add(volumeOwner.gameObject.AddComponent<Volume>());
